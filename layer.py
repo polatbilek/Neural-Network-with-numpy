@@ -3,7 +3,7 @@ import math
 
 class Layer():
 
-	def __init__(self, in_size, out_size, activation_func, initialization, dropout=0, seed=-1, batch_size=1):
+	def __init__(self, in_size, out_size, activation_func, initialization, learning_rate, dropout=0, seed=-1, batch_size=1):
 		if seed != -1:
 			np.random.seed(seed)
 
@@ -41,6 +41,7 @@ class Layer():
 		self.batch_size = batch_size
 		self.in_size = in_size
 		self.out_size = out_size
+		self.learning_rate = learning_rate
 
 	################### FORWARD FUNCTIONS ###################
 	def relu_forward(self, X):
@@ -48,18 +49,16 @@ class Layer():
 		if self.batch_size != 1:
 			for batch in range(len(X)):
 				for neuron in range(len(X[batch])):
-					if X[batch][neuron] < 0:
-						X[batch][neuron] = 0
+					X[batch][neuron] = np.maximum(0, X[batch][neuron])
 
 		else:
 			for neuron in range(len(X)):
-				if X[neuron] < 0:
-					X[neuron] = 0
+				X[neuron] = np.maximum(0, X[neuron])
 
 		return X
 
 	def sigmoid_forward(self, X):
-		activate = lambda z: 1/(1+math.e**-z)
+		activate = lambda z: 1/(1+np.exp(-z))
 
 		if self.batch_size != 1:
 			for batch in range(len(X)):
@@ -126,7 +125,7 @@ class Layer():
 
 
 	################### BACKWARD FUNCTIONS ###################
-	def relu_backward(self, X):
+	def relu_backward(self, err_prop, X):
 		back = np.zeros((self.batch_size, self.in_size))
 
 		if self.batch_size != 1:
@@ -143,10 +142,10 @@ class Layer():
 		return back.squeeze()
 
 
-	def sigmoid_backward(self, X):
+	def sigmoid_backward(self, err_prop, X):
 		back = np.zeros((self.batch_size, self.in_size))
-		f = lambda z: 1/(1+math.e**-z)
-		backward = lambda x: f(x)*(1-f(x))
+		f = lambda z: 1/(1+np.exp(-z))
+		backward = lambda x: err_prop*f(x)*(1-f(x))
 
 		if self.batch_size != 1:
 			for batch in range(len(X)):
@@ -158,7 +157,7 @@ class Layer():
 			return np.asarray(list(map(backward, X))).squeeze()
 
 
-	def tanh_backward(self, X):
+	def tanh_backward(self, err_prop, X):
 		back = np.zeros((self.batch_size, self.in_size))
 		f = lambda z: (math.e ** z - math.e ** -z) / (math.e ** z + math.e ** -z)
 		backward = lambda x: 1 - (f(x)**2)
@@ -182,11 +181,14 @@ class Layer():
 
 	################### ITERATION FUNCTIONS ###################
 	def forward(self, X):
-		return self.activation_function(np.add(np.asarray(X).dot(self.weights), self.bias))
+		Z = np.add(np.asarray(X).dot(self.weights), self.bias)
+		return self.activation_function(Z), Z
 
 
-	def backward(self, X):
-		return self.backward_activation(np.add(np.asarray(X).dot(self.weights), self.bias))
+
+	def backward(self, err_prop, X):
+		Z = np.add(np.asarray(X).dot(self.weights), self.bias)
+		return self.backward_activation(err_prop, Z)
 
 
 
