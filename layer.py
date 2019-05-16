@@ -9,29 +9,33 @@ class Layer():
 
 		if str.lower(initialization) == "normal":
 			self.weights = np.random.normal(0, 1, size=(in_size, out_size))
-			self.bias = np.random.normal(0, 1, size=(in_size, out_size))
+			self.bias = np.random.normal(0, 1, size=(out_size))
 
 		elif str.lower(initialization) == "xavier":
 			self.weights = np.random.normal(0, math.sqrt(1/in_size), size=(in_size, out_size))
-			self.bias = np.random.normal(0, math.sqrt(1/in_size), size=(in_size, out_size))
+			self.bias = np.random.normal(0, math.sqrt(1/in_size), size=(out_size))
 
 		else:
 			assert("Invalid initizaliation parameter is passed. Valid parameters: normal, xavier")
 
 		if str.lower(activation_func) == "relu":
 			self.activation_function = self.relu_forward
-			self.bacward_activation = self.relu_back
+			self.backward_activation = self.relu_backward
 
 		elif str.lower(activation_func) == "sigmoid":
 			self.activation_function = self.sigmoid_forward
-			self.bacward_activation = self.sigmoid_back
+			self.backward_activation = self.sigmoid_backward
 
 		elif str.lower(activation_func) == "tanh":
 			self.activation_function = self.tanh_forward
-			self.bacward_activation = self.tanh_back
+			self.backward_activation = self.tanh_backward
+
+		elif str.lower(activation_func) == "softmax":
+			self.activation_function = self.softmax_forward
+			self.backward_activation = self.softmax_backward
 
 		else:
-			assert ("Invalid activation function is passed. Valid functions: relu, sigmoid, tanh")
+			assert("Invalid activation function is passed. Valid functions: relu, sigmoid, tanh")
 
 		self.dropout = dropout
 		self.batch_size = batch_size
@@ -82,8 +86,47 @@ class Layer():
 			return np.asarray(list(map(activate, X)))
 
 
+
+	def softmax_forward(self, X):
+		probs = []
+
+		if self.batch_size != 1:
+			denominators = []
+
+			# first, determine denominators to not calculate it for every neuron
+			for batch in range(len(X)):
+				sum = 0
+				for neuron in batch:
+					sum += math.pow(math.e, neuron)
+				denominators.append(sum)
+
+			# apply softmax to each neuron
+			for batch in range(len(X)):
+				prob = []
+				for neuron in batch:
+					prob.append((math.pow(math.e, neuron)/denominators[batch]))
+
+				probs.append(prob)
+
+			return np.asarray(probs)
+
+		else:
+			denominator = 0
+
+			# first, determine denominator to not calculate it for every neuron
+			for neuron in X:
+				denominator += math.pow(math.e, neuron)
+
+			# apply softmax to each neuron
+				for neuron in X:
+					probs.append((math.pow(math.e, neuron) / denominator))
+
+
+			return np.asarray(probs)
+
+
 	################### BACKWARD FUNCTIONS ###################
-	def relu_back(self, X):
+	def relu_backward(self, X):
 		back = np.zeros((self.batch_size, self.in_size))
 
 		if self.batch_size != 1:
@@ -100,7 +143,7 @@ class Layer():
 		return back.squeeze()
 
 
-	def sigmoid_back(self, X):
+	def sigmoid_backward(self, X):
 		back = np.zeros((self.batch_size, self.in_size))
 		f = lambda z: 1/(1+math.e**-z)
 		backward = lambda x: f(x)*(1-f(x))
@@ -115,7 +158,7 @@ class Layer():
 			return np.asarray(list(map(backward, X))).squeeze()
 
 
-	def tanh_back(self, X):
+	def tanh_backward(self, X):
 		back = np.zeros((self.batch_size, self.in_size))
 		f = lambda z: (math.e ** z - math.e ** -z) / (math.e ** z + math.e ** -z)
 		backward = lambda x: 1 - (f(x)**2)
@@ -130,14 +173,20 @@ class Layer():
 			return np.asarray(list(map(backward, X))).squeeze()
 
 
+	def softmax_backward(self, X):
+		pass
+
+
+
+
+
 	################### ITERATION FUNCTIONS ###################
 	def forward(self, X):
-		if self.batch_size != 1:
-			print(np.asarray(X).shape)
-			return self.activation_function(np.asarray(X).dot(self.weights) + self.bias)
-		else:
-			return self.activation_function(np.asarray(X).dot(self.weights) + self.bias)
+		return self.activation_function(np.add(np.asarray(X).dot(self.weights), self.bias))
 
+
+	def backward(self, X):
+		return self.backward_activation(np.add(np.asarray(X).dot(self.weights), self.bias))
 
 
 
