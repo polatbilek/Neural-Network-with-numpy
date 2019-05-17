@@ -5,10 +5,10 @@ import numpy as np
 
 class Model():
 
-	def __init__(self, activation_func, initialization, numof_layers, learning_rate, layer_sizes, num_classes, objective_function, dropout=0, seed=-1, batch_size=1):
+	def __init__(self, activation_func, initialization, learning_rate, layer_sizes, num_classes, objective_function, dropout=0, seed=-1, batch_size=1):
 		self.activation_function = activation_func
 		self.initialization = initialization
-		self.num_of_layer = numof_layers
+		self.num_of_layers = len(layer_sizes)
 		self.layer_sizes = layer_sizes
 		self.dropout = dropout
 		self.seed = seed
@@ -23,7 +23,7 @@ class Model():
 			if layer+1 != self.num_of_layers:
 				self.layers.append(Layer(in_size = self.layer_sizes[layer],
 										 out_size = self.layer_sizes[layer+1],
-										 activation_func = self.activation_func,
+										 activation_func = self.activation_function,
 										 initialization = self.initialization,
 										 dropout = self.dropout,
 										 seed = self.seed,
@@ -43,8 +43,37 @@ class Model():
 
 
 
-	def cross_entropy(self, probs, Y):
-		return np.asarray(list(map(np.average, np.dot(np.asarray(Y), np.asarray(probs).transpose()))))
+	def cross_entropy(self, Y, probs):
+
+		if self.batch_size != 1:
+			loss = np.zeros(shape=(self.batch_size, self.num_classes))
+
+			for batch in range(self.batch_size):
+				error = -1*np.log(np.dot(np.asarray(Y[batch]), np.asarray(probs[batch]).transpose()))
+				loss[batch][np.argmax(Y[batch])] = error
+
+		else:
+			loss = np.zeros(self.num_classes)
+			error = -1*np.log(np.dot(np.asarray(Y), np.asarray(probs).transpose()))
+			loss[np.argmax(Y)] = error
+
+		return loss
+
+
+	def cross_entropy_backward(self, Y, probs):
+		if self.batch_size != 1:
+			loss = np.zeros(shape=(self.batch_size, self.num_classes))
+
+			for batch in range(self.batch_size):
+				error = -1*np.log(np.dot(np.asarray(Y[batch]), np.asarray(probs[batch]).transpose()))
+				loss[batch][np.argmax(Y[batch])] = error
+
+		else:
+			loss = np.zeros(self.num_classes)
+			error = -1*np.log(np.dot(np.asarray(Y), np.asarray(probs).transpose()))
+			loss[np.argmax(Y)] = error
+
+		return loss
 
 	# for each layer outs object will hold a list in this form [Z, activation(Z)]
 	def forward(self, X):

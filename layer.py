@@ -172,8 +172,12 @@ class Layer():
 			return np.asarray(list(map(backward, X))).squeeze()
 
 
-	def softmax_backward(self, X):
-		pass
+	def softmax_backward(self, err_prop, X):
+		if self.batch_size != 1:
+			np.max(X)
+		else:
+			X[np.argmax(X)] = 1-np.max(X)
+			return X
 
 
 
