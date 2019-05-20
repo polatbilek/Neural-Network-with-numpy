@@ -1,14 +1,15 @@
 from layer import Layer
 import math
 import numpy as np
+from tqdm import tqdm
 
 
 class Model():
 
-	def __init__(self, activation_func, initialization, learning_rate, layer_sizes, num_classes, objective_function, dropout=0, seed=-1, batch_size=1):
+	def __init__(self, activation_func, initialization, learning_rate, num_epoch, layer_sizes, num_classes, objective_function, dropout=0, seed=-1, batch_size=1):
 		self.activation_function = activation_func
 		self.initialization = initialization
-		self.num_of_layers = len(layer_sizes)
+		self.num_of_layers = len(layer_sizes)-1
 		self.layer_sizes = layer_sizes
 		self.dropout = dropout
 		self.seed = seed
@@ -16,7 +17,7 @@ class Model():
 		self.num_classes = num_classes
 		self.learning_rate = learning_rate
 		self.objective_function = objective_function
-		self.memory = {}
+		self.num_epoch = num_epoch
 
 		self.layers = []
 		for layer in range(self.num_of_layers):
@@ -43,59 +44,98 @@ class Model():
 
 
 
+
 	def cross_entropy(self, Y, probs):
+		loss = 0
 
 		if self.batch_size != 1:
-			loss = np.zeros(shape=(self.batch_size, self.num_classes))
+			for batch in range(len(Y)):
+				for index in range(self.num_classes):
+					error = Y[batch][index]*np.log(probs[batch][index]) + (1-Y[batch][index])*np.log((1-probs[batch][index]))
+					loss += error
 
-			for batch in range(self.batch_size):
-				error = -1*np.log(np.dot(np.asarray(Y[batch]), np.asarray(probs[batch]).transpose()))
-				loss[batch][np.argmax(Y[batch])] = error
+			return loss / (len(Y)*self.num_classes)
 
 		else:
-			loss = np.zeros(self.num_classes)
-			error = -1*np.log(np.dot(np.asarray(Y), np.asarray(probs).transpose()))
-			loss[np.argmax(Y)] = error
+			for index in range(len(self.num_classes)):
+				error = Y[index] * np.log(probs[index]) + (1-Y[index]) * np.log((1-probs[index]))
+				loss += error
 
-		return loss
+			return loss / self.num_classes
 
 
 	def cross_entropy_backward(self, Y, probs):
-		if self.batch_size != 1:
-			loss = np.zeros(shape=(self.batch_size, self.num_classes))
 
-			for batch in range(self.batch_size):
-				error = -1*np.log(np.dot(np.asarray(Y[batch]), np.asarray(probs[batch]).transpose()))
-				loss[batch][np.argmax(Y[batch])] = error
+		if self.batch_size != 1:
+			loss = np.zeros(shape=(len(Y), self.num_classes))
+
+			for batch in range(len(Y)):
+				for index in range(self.num_classes):
+					error = -1*((Y[batch][index]*(1/probs[batch][index])) +
+								((1-Y[batch][index])*(1/(1-probs[batch][index]))))
+					loss[batch][index] = error
+
+			loss = np.mean(loss, axis=0)
+			return loss
 
 		else:
 			loss = np.zeros(self.num_classes)
-			error = -1*np.log(np.dot(np.asarray(Y), np.asarray(probs).transpose()))
-			loss[np.argmax(Y)] = error
+			for index in range(self.num_classes):
+				error = -1 * ((Y[index] * (1 / probs[index])) +
+							  ((1 - Y[index]) * (1 / (1 - probs[index]))))
+				loss[index] = error
 
-		return loss
+			return loss
+
 
 	# for each layer outs object will hold a list in this form [Z, activation(Z)]
 	def forward(self, X):
-		self.memory = {}
 		prev_activated_z = X
-		predictions = 0
 
 		# here each layer is its neurons and weights, so it will hold the neuron values and Z value after forwarding
-		for layer in self.num_of_layer:
-			activated_z, z = self.layers[layer].forward(prev_activated_z)
-			self.memory[str(layer)] = [prev_activated_z, z]
+		for layer in range(self.num_of_layers):
+			activated_z, _ = self.layers[layer].forward(prev_activated_z)
 			prev_activated_z = activated_z
 
-			if layer+1 == self.num_of_layer:
+			if layer+1 == self.num_of_layers:
 				return activated_z
 
 
-	def backward(self):
-		pass
+	def backward(self, error):
+		layer = self.num_of_layers-1
+
+		while layer != 0:
+			print("eeeeeeeeeeeeeeeeee")
+			print(np.shape(self.layers[layer].input))
+			print(np.shape(self.layers[layer-1].input))
+			print(np.shape(self.layers[layer-2].input))
+			print(np.shape(self.layers[layer-3].input))
+			print("eeeeeeeeeeeeeeeeee")
+			error = self.layers[layer].backward(self.layers[layer-1], error)
+			layer -= 1
+
 
 	def train(self, X, Y):
-		pass
+		X = list(X)
+		Y = list(Y)
+
+		for epoch in range(self.num_epoch):
+			print("=!=!=!=!  Epoch "+str(epoch)+"  =!=!=!=!")
+
+			for batch in tqdm(range(math.ceil(len(X)/self.batch_size))):
+				if batch+1 == math.ceil(len(X)/self.batch_size):
+					predictions = self.forward(X[(batch - 1) * self.batch_size:-1])
+					loss = self.cross_entropy(Y[(batch - 1) * self.batch_size:-1], predictions)
+					error_signal = self.cross_entropy_backward(Y[(batch - 1) * self.batch_size:-1],
+															   predictions)
+
+				else:
+					predictions = self.forward(X[batch*self.batch_size:(batch+1)*self.batch_size])
+					loss = self.cross_entropy(Y[batch*self.batch_size:(batch+1)*self.batch_size], predictions)
+					error_signal = self.cross_entropy_backward(Y[batch*self.batch_size:(batch+1)*self.batch_size], predictions)
+
+				self.backward(error_signal)
+
 
 	def accuracy(self, prediction_probs, Y):
 		predictions = np.zeros((np.shape(prediction_probs)))
@@ -110,6 +150,7 @@ class Model():
 				true_pred += 1
 
 		return true_pred/len(predictions)
+
 
 
 	def test(self, X, Y):
