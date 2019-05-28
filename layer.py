@@ -45,14 +45,16 @@ class Layer():
 		self.activated_output = 0
 		self.input = 0
 
-
-	def normalize(self, unnormalized_list, range_min, range_max):
+	####################################################################################
+	#                                 HELPER FUNCTIONS                                 #
+	####################################################################################
+	def normalize(self, unnormalized_list, range_min, range_max): #Normalization for softmax, doesn't change the result
 		new_list = []
 
 		for element in unnormalized_list:
 			new_list.append((((element - max(unnormalized_list)) * (range_max - range_min)) / (max(unnormalized_list) - min(unnormalized_list)))+range_min)
 
-		return  new_list
+		return new_list
 
 	def activation_clip(self, data, threshold):
 		if self.batch_size != 1:
@@ -66,7 +68,10 @@ class Layer():
 
 		return data
 
-	################### FORWARD FUNCTIONS ###################
+
+	####################################################################################
+	#                                 FORWARD FUNCTIONS                                #
+	####################################################################################
 	def relu_forward(self, X):
 
 		if self.batch_size != 1:
@@ -95,11 +100,10 @@ class Layer():
 
 		else:
 			X = np.squeeze(X)
-			X = self.activation_clip(X, 700)
+			X = self.activation_clip(X, 700) #gradient clipping for inf or 0 values, range:[-700, 700]
 
 			self.activated_output = np.asarray(list(map(activate, X)))
 			return self.activated_output
-
 
 
 
@@ -128,12 +132,12 @@ class Layer():
 			# first, determine denominators to not calculate it for every neuron
 			for batch in range(len(X)):
 				sum = 0
-				X[batch] = self.normalize(X[batch], range_max=200, range_min=-200)
+				X[batch] = self.normalize(X[batch], range_max=200, range_min=-200) #activation normalization
 				for neuron in X[batch]:
 					sum += np.power(np.e, neuron)
 
 				if sum == 0:
-					denominators.append(0.000001)
+					denominators.append(0.000001) #0 division prevention, never happens but it's better to be protective
 				else:
 					denominators.append(sum)
 
@@ -164,7 +168,9 @@ class Layer():
 			return self.activated_output
 
 
-	################### BACKWARD FUNCTIONS ###################
+	####################################################################################
+	#                                 BACKWARD FUNCTIONS                               #
+	####################################################################################
 	def relu_backward(self, X):
 		back = np.zeros(np.shape(X))
 
@@ -215,11 +221,13 @@ class Layer():
 			return np.asarray(list(map(backward, X))).squeeze()
 
 
-	def softmax_backward(self, X):
+	def softmax_backward(self, X): # We take the derivative of cross-entropy with softmax, so it is already taken
 		return X
 
 
-	################### ITERATION FUNCTIONS ###################
+	####################################################################################
+	#                                ITERATION FUNCTIONS                               #
+	####################################################################################
 	def forward(self, X):
 		X = list(X)
 		X = np.squeeze(X)
@@ -240,8 +248,10 @@ class Layer():
 		if self.batch_size != 1:
 			pass
 		else:
+			# First we get rid of all possible empty dimensions then add only 1. ((1,1,2) may happen istead of (1,2))
 			self.activated_output = np.squeeze(self.activated_output)
 			self.activated_output = np.expand_dims(self.activated_output, axis=0)
+			# Then add the empty dimension to be able to take dot product
 			error_signal = np.expand_dims(error_signal, axis=0)
 			self.input = np.expand_dims(self.input, axis=0)
 
@@ -253,17 +263,6 @@ class Layer():
 
 			error_to_next_layer = np.squeeze(error_to_next_layer)
 			self.input = np.squeeze(self.input)
+
 		return error_to_next_layer
-
-
-
-
-
-
-
-
-
-
-
-
 

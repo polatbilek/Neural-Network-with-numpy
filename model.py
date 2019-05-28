@@ -1,8 +1,8 @@
 from layer import Layer
 import numpy as np
-import sys
 
-class Model():
+
+class Model:
 
 	def __init__(self, activation_func, initialization, learning_rate, num_epoch, layer_sizes, num_classes, objective_function, dropout=0, seed=-1, batch_size=1, print_every=-1):
 		self.activation_function = activation_func
@@ -18,67 +18,75 @@ class Model():
 		self.num_epoch = num_epoch
 		self.print_every = print_every
 
+		#There is a trick here, the last layer is always objective function, so we don't create additionaly softmax layer
+		#Instead, the last layer's activation is softmax. If you want to use activation function on last layer then softmax,
+		#You can modify softmax to first activate with your desired function then softmax,
+		# P.S: Careful about backward in that case, An additional case should be considered for softmax in backward
 		self.layers = []
 		for layer in range(self.num_of_layers):
 			if layer+1 != self.num_of_layers:
-				self.layers.append(Layer(in_size = self.layer_sizes[layer],
-										 out_size = self.layer_sizes[layer+1],
-										 activation_func = self.activation_function,
-										 initialization = self.initialization,
-										 dropout = self.dropout,
-										 seed = self.seed,
-										 batch_size = self.batch_size,
-										 learning_rate = self.learning_rate
-										 ))
+				self.layers.append(Layer(in_size=self.layer_sizes[layer],
+										out_size=self.layer_sizes[layer+1],
+										activation_func=self.activation_function,
+										initialization=self.initialization,
+										dropout=self.dropout,
+										seed=self.seed,
+										batch_size=self.batch_size,
+										learning_rate=self.learning_rate
+										))
 			else:
-				self.layers.append(Layer(in_size = self.layer_sizes[layer],
-										 out_size = self.num_classes,
-										 activation_func = self.objective_function,
-										 initialization = self.initialization,
-										 dropout = self.dropout,
-										 seed = self.seed,
-										 batch_size = self.batch_size,
-										 learning_rate = self.learning_rate
-										 ))
+				self.layers.append(Layer(in_size=self.layer_sizes[layer],
+										out_size=self.num_classes,
+										activation_func=self.objective_function,
+										initialization=self.initialization,
+										dropout=self.dropout,
+										seed=self.seed,
+										batch_size=self.batch_size,
+										learning_rate=self.learning_rate
+										))
 
-
-	def cross_entropy(self, Y, probs):
+	#Our only loss so far, later there will be option for loss functions
+	# Max loss is 1M, because the model throws high loss at the beginning which causes inf loss, you can change max
+	def cross_entropy(self, labels, probs):
 		loss = 0
+		max_loss = 1000000
 
 		if self.batch_size != 1:
-			for batch in range(len(Y)):
+			for batch in range(len(labels)):
 				for index in range(self.num_classes):
-					if Y[batch][index] == 1:
+					if labels[batch][index] == 1:
 						if probs[batch][index] == 0:
-							loss = 1000000
+							loss = max_loss
 						else:
-							loss += Y[batch][index]*np.log(probs[batch][index])
+							loss += labels[batch][index]*np.log(probs[batch][index])
 					else:
 						if probs[batch][index] == 0:
-							loss = 1000000
+							loss = max_loss
 						else:
-							loss += (1-Y[batch][index])*np.log((1-probs[batch][index]))
+							loss += (1-labels[batch][index])*np.log((1-probs[batch][index]))
 
-			return loss / (len(Y)*self.num_classes)
+			return loss / (len(labels)*self.num_classes)
 
 		else:
-			Y = np.squeeze(Y)
+			labels = np.squeeze(labels)
 			probs = np.squeeze(probs)
 			for index in range(self.num_classes):
-				if Y[index] == 1:
+				if labels[index] == 1:
 					if probs[index] == 0:
-						loss = 1000000
+						loss = max_loss
 					else:
 						loss += np.log(probs[index])
 				else:
 					if probs[index] == 1:
-						loss = 1000000
+						loss = max_loss
 					else:
 						loss += np.log((1-probs[index]))
 
 			return loss / self.num_classes
 
 
+	#this is cross entropy with softmax backward, i couldn't come up with better approach
+	#better approach is taking derivative of croos entropy w.r.t softmax out, then derivate softmax w.r.t activation out
 	def cross_entropy_backward(self, Y, probs):
 
 		if self.batch_size != 1:
@@ -101,11 +109,11 @@ class Model():
 		return loss
 
 
-	# for each layer outs object will hold a list in this form [Z, activation(Z)]
-	def forward(self, X):
-		prev_activated_z = X
 
-		# here each layer is its neurons and weights, so it will hold the neuron values and Z value after forwarding
+	def forward(self, data):
+		prev_activated_z = data
+
+		# 1 layer's activated out is another's input
 		for layer in range(self.num_of_layers):
 			activated_z = self.layers[layer].forward(prev_activated_z)
 			prev_activated_z = activated_z
@@ -118,7 +126,7 @@ class Model():
 		layer = self.num_of_layers-1
 
 		while layer >= 0:
-			error = self.layers[layer].backward(error)
+			error = self.layers[layer].backward(error) #backward is all done in layers, we just propagate error here
 			layer -= 1
 
 
@@ -136,7 +144,7 @@ class Model():
 					if len(data[batch * self.batch_size:-1]) != 0:
 						predictions = self.forward(data[batch * self.batch_size:-1])
 						loss = self.cross_entropy(labels[batch * self.batch_size:-1], predictions)
-						error_signal = self.cross_entropy_backward(Y[(batch - 1) * self.batch_size:-1], predictions)
+						error_signal = self.cross_entropy_backward(labels[(batch - 1) * self.batch_size:-1], predictions)
 
 				else:
 					predictions = self.forward(data[batch*self.batch_size:(batch+1)*self.batch_size])
@@ -149,7 +157,6 @@ class Model():
 						print("Epoch= " + str(epoch) + ", Batch coverage= %" +
 								str(100*(batch/int(np.ceil(len(data)/self.batch_size)))) +
 								", Loss= " + str(loss) + ", Accuracy= " + str(accuracy))
-
 
 				self.backward(error_signal)
 
@@ -176,33 +183,26 @@ class Model():
 				return 0
 
 
-
-	def test(self, X, Y):
-
+	def test(self, test_x, test_y):
 		final_accuracy = 0
 		final_loss = 0
 
-		for batch in range(int(np.ceil(len(X)/self.batch_size))):
-			if batch+1 == int(np.ceil(len(X)/self.batch_size)):
-				if len(X[batch*self.batch_size:-1]) != 0:
-					preds = self.forward(X[batch*self.batch_size:-1])
-					loss = self.cross_entropy(preds, Y[batch*self.batch_size:-1])
+		for batch in range(int(np.ceil(len(test_x)/self.batch_size))):
+			if batch+1 == int(np.ceil(len(test_x)/self.batch_size)):
+				if len(test_x[batch*self.batch_size:-1]) != 0:
+					preds = self.forward(test_x[batch*self.batch_size:-1])
+					loss = self.cross_entropy(preds, test_y[batch*self.batch_size:-1])
 
 			else:
-				preds = self.forward(X[batch*self.batch_size:(batch+1)*self.batch_size])
-				loss = self.cross_entropy(preds, Y[batch*self.batch_size:(batch+1)*self.batch_size])
+				preds = self.forward(test_x[batch*self.batch_size:(batch+1)*self.batch_size])
+				loss = self.cross_entropy(preds, test_y[batch*self.batch_size:(batch+1)*self.batch_size])
 
-			acc = self.accuracy(preds, Y[batch*self.batch_size:(batch+1)*self.batch_size])
+			acc = self.accuracy(preds, test_y[batch*self.batch_size:(batch+1)*self.batch_size])
 
 			final_accuracy += acc
 			final_loss += loss
 
-		total_num_of_data = int(np.ceil(len(X)/self.batch_size)) * self.batch_size
+		total_num_of_data = int(np.ceil(len(test_x)/self.batch_size)) * self.batch_size
 
 
 		return final_loss/total_num_of_data, final_accuracy/total_num_of_data
-
-
-
-
-

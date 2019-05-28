@@ -1,4 +1,3 @@
-from layer import Layer
 from model import Model
 import numpy as np
 import random
@@ -52,13 +51,12 @@ model = Model(activation_func="relu",
 		  num_epoch=2,
 		  objective_function="softmax",
 		  dropout=0,
-		  seed=-1,
 		  batch_size=1,
 		  learning_rate=0.01,
 		  print_every=300)
 
 
-train_x, train_y, test_x, test_y = data_gen()
+train_x, train_y, test_x, test_y = data_gen() #get a random data to test the implementation if it learns
 
 valid_x = train_x[int(0.8*len(train_x)):-1]
 valid_y = train_y[int(0.8*len(train_y)):-1]
