@@ -1,5 +1,5 @@
 import numpy as np
-import math
+import sys
 
 class Layer():
 
@@ -12,8 +12,8 @@ class Layer():
 			self.bias = np.random.normal(0, 1, size=(out_size))
 
 		elif str.lower(initialization) == "xavier":
-			self.weights = np.random.normal(0, math.sqrt(1/in_size), size=(in_size, out_size))
-			self.bias = np.random.normal(0, math.sqrt(1/in_size), size=(out_size))
+			self.weights = np.random.normal(0, np.sqrt(1/in_size), size=(in_size, out_size))
+			self.bias = np.random.normal(0, np.sqrt(1/in_size), size=(out_size))
 
 		else:
 			assert("Invalid initizaliation parameter is passed. Valid parameters: normal, xavier")
@@ -45,9 +45,29 @@ class Layer():
 		self.activated_output = 0
 		self.input = 0
 
+
+	def normalize(self, unnormalized_list, range_min, range_max):
+		new_list = []
+
+		for element in unnormalized_list:
+			new_list.append((((element - max(unnormalized_list)) * (range_max - range_min)) / (max(unnormalized_list) - min(unnormalized_list)))+range_min)
+
+		return  new_list
+
+	def activation_clip(self, data, threshold):
+		if self.batch_size != 1:
+			pass
+		else:
+			for element in range(len(data)):
+				if data[element] > threshold:
+					data[element] = threshold
+				elif data[element] < -1*threshold:
+					data[element] = -1*threshold
+
+		return data
+
 	################### FORWARD FUNCTIONS ###################
 	def relu_forward(self, X):
-		self.input = X.copy()
 
 		if self.batch_size != 1:
 			for batch in range(len(X)):
@@ -64,7 +84,6 @@ class Layer():
 
 
 	def sigmoid_forward(self, X):
-		self.input = X
 		activate = lambda z: 1/(1+np.exp(-z))
 
 		if self.batch_size != 1:
@@ -75,15 +94,17 @@ class Layer():
 			return np.asarray(X)
 
 		else:
+			X = np.squeeze(X)
+			X = self.activation_clip(X, 700)
+
 			self.activated_output = np.asarray(list(map(activate, X)))
-			return np.asarray(list(map(activate, X)))
+			return self.activated_output
 
 
 
 
 	def tanh_forward(self, X):
-		self.input = X
-		activate = lambda z: (math.e**z - math.e**-z)/(math.e**z + math.e**-z)
+		activate = lambda z: (np.power(np.e, z) - np.power(np.e, -z))/(np.power(np.e, z) + np.power(np.e, -z))
 
 		if self.batch_size != 1:
 			for batch in range(len(X)):
@@ -99,7 +120,6 @@ class Layer():
 
 
 	def softmax_forward(self, X):
-		self.input = X
 		probs = []
 
 		if self.batch_size != 1:
@@ -108,11 +128,12 @@ class Layer():
 			# first, determine denominators to not calculate it for every neuron
 			for batch in range(len(X)):
 				sum = 0
+				X[batch] = self.normalize(X[batch], range_max=200, range_min=-200)
 				for neuron in X[batch]:
-					sum += math.pow(math.e, neuron)
+					sum += np.power(np.e, neuron)
 
 				if sum == 0:
-					denominators.append(0.000000001)
+					denominators.append(0.000001)
 				else:
 					denominators.append(sum)
 
@@ -120,7 +141,7 @@ class Layer():
 			for batch in range(len(X)):
 				prob = []
 				for neuron in X[batch]:
-					prob.append((math.pow(math.e, neuron)/denominators[batch]))
+					prob.append((np.power(np.e, neuron)/denominators[batch]))
 
 				probs.append(prob)
 
@@ -132,19 +153,20 @@ class Layer():
 
 			# first, determine denominator to not calculate it for every neuron
 			for neuron in X:
-				denominator += math.pow(math.e, neuron)
+				denominator += np.power(np.e, neuron)
 
 			# apply softmax to each neuron
-				for neuron in X:
-					probs.append((math.pow(math.e, neuron) / denominator))
+			for neuron in X:
+				probs.append((np.power(np.e, neuron) / denominator))
 
-			self.activated_output = np.asarray(probs)
-			return np.asarray(probs)
+
+			self.activated_output = np.squeeze(np.asarray(probs))
+			return self.activated_output
 
 
 	################### BACKWARD FUNCTIONS ###################
 	def relu_backward(self, X):
-		back = np.zeros((self.batch_size, self.in_size))
+		back = np.zeros(np.shape(X))
 
 		if self.batch_size != 1:
 			for batch in range(len(X)):
@@ -153,6 +175,9 @@ class Layer():
 						back[batch][neuron] = 1
 
 		else:
+
+			X = X[0]
+			back = back[0]
 			for neuron in range(len(X)):
 				if X[neuron] > 0:
 					back[neuron] = 1
@@ -177,7 +202,7 @@ class Layer():
 
 	def tanh_backward(self, X):
 		back = np.zeros((self.batch_size, self.in_size))
-		f = lambda z: (math.e ** z - math.e ** -z) / (math.e ** z + math.e ** -z)
+		f = lambda z: ((np.power(np.e,z) - np.power(np.e,-z))) / (np.power(np.e,z) + np.power(np.e,-z))
 		backward = lambda x: 1 - (f(x)**2)
 
 		if self.batch_size != 1:
@@ -192,46 +217,42 @@ class Layer():
 
 	def softmax_backward(self, X):
 		return X
-		'''
-		if self.batch_size != 1:
-			np.max(X)
-		else:
-			X[np.argmax(X)] = 1-np.max(X)
-			return X
-		'''
-
-
 
 
 	################### ITERATION FUNCTIONS ###################
 	def forward(self, X):
+		X = list(X)
+		X = np.squeeze(X)
+		self.input = X.copy()
 
-		if self.activation_function == self.softmax_forward:
-			return self.activation_function(X), X
+		if self.batch_size != 1:
+			Z = np.add(np.asarray(X).dot(self.weights), self.bias)
 		else:
 			Z = np.add(np.asarray(X).dot(self.weights), self.bias)
-			return self.activation_function(Z), Z
+			Z = np.squeeze(Z)
 
 
-
-	def backward(self, prev_layer, error_signal):
-
-		back = self.backward_activation(self.activated_output)
-		print(np.shape(back))
-		print(np.shape(self.activated_output))
-		print(np.shape(error_signal))
-		print(np.shape(prev_layer.input))
-		print(np.shape(prev_layer.weights))
-		print(np.shape(self.weights))
-		print(np.shape(self.input))
-		print("!!!!!!!!!!!!!!!!")
+		return self.activation_function(Z)
 
 
-		delta = np.multiply(self.activated_output, error_signal)
-		error_to_next_layer = np.asarray(delta).dot(self.weights.transpose())
-		print(np.shape(delta))
-		prev_layer.weights = np.add(self.weights, np.multiply(self.learning_rate, np.asarray(self.input).transpose().dot(np.asarray(delta))))
-		prev_layer.bias = np.add(prev_layer.bias, np.multiply(self.learning_rate, delta))
+	def backward(self, error_signal):
+
+		if self.batch_size != 1:
+			pass
+		else:
+			self.activated_output = np.squeeze(self.activated_output)
+			self.activated_output = np.expand_dims(self.activated_output, axis=0)
+			error_signal = np.expand_dims(error_signal, axis=0)
+			self.input = np.expand_dims(self.input, axis=0)
+
+			delta = np.multiply(error_signal, self.backward_activation(self.activated_output))
+			error_to_next_layer = delta.dot(self.weights.transpose())
+
+			self.weights = np.add(self.weights, np.multiply(self.learning_rate, self.input.transpose().dot(delta)))
+			self.bias = np.add(self.bias, np.multiply(self.learning_rate, delta))
+
+			error_to_next_layer = np.squeeze(error_to_next_layer)
+			self.input = np.squeeze(self.input)
 		return error_to_next_layer
 
 

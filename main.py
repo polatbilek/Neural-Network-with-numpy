@@ -4,14 +4,16 @@ import numpy as np
 import random
 
 def data_gen():
-	mu1 = [0,0]
-	cov1 = [[1,0],[0,1]]
+	mu1 = [2,2]
+	cov1 = [[0.1,0],
+			[0,0.1]]
 
-	mu2 = [1.5, 1]
-	cov2= [[0.8, 0.5],[0.4,0.8]]
+	mu2 = [-2, -2]
+	cov2= [[0.1, 0.1],
+		   [0.1,0.1]]
 
 	test_size = 500
-	train_size = 1500
+	train_size = 2000
 
 	train_1 = np.random.multivariate_normal(mu1, cov1, train_size)
 	train_label1 = [[0, 1] for i in range(train_size)]
@@ -45,19 +47,30 @@ def data_gen():
 
 model = Model(activation_func="relu",
 		  initialization="normal",
-		  layer_sizes=[2,5,5,2],
+		  layer_sizes=[2,5,7,5,2],
 		  num_classes=2,
-		  num_epoch=3,
+		  num_epoch=2,
 		  objective_function="softmax",
 		  dropout=0,
 		  seed=-1,
-		  batch_size=3,
-		  learning_rate=0.01)
+		  batch_size=1,
+		  learning_rate=0.01,
+		  print_every=300)
 
 
 train_x, train_y, test_x, test_y = data_gen()
 
-model.train(train_x, train_y)
-print(model.test(test_x, test_y))
+valid_x = train_x[int(0.8*len(train_x)):-1]
+valid_y = train_y[int(0.8*len(train_y)):-1]
+train_x = train_x[0:int(0.8*len(train_x))]
+train_y = train_y[0:int(0.8*len(train_y))]
+
+
+model.train(train_x, train_y, valid_x, valid_y)
+
+print("Testing Started...")
+test_loss, test_accuracy = model.test(test_x, test_y)
+print("!!! Test Results !!!")
+print("Test Loss= " + str(test_loss) + ", Test Accuracy= " + str(test_accuracy))
 
 
