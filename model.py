@@ -18,6 +18,9 @@ class Model:
 		self.num_epoch = num_epoch
 		self.print_every = print_every
 
+		if self.dropout == 0:
+			self.dropout = np.zeros(self.num_of_layers)
+
 		#There is a trick here, the last layer is always objective function, so we don't create additionaly softmax layer
 		#Instead, the last layer's activation is softmax. If you want to use activation function on last layer then softmax,
 		#You can modify softmax to first activate with your desired function then softmax,
@@ -29,7 +32,7 @@ class Model:
 										out_size=self.layer_sizes[layer+1],
 										activation_func=self.activation_function,
 										initialization=self.initialization,
-										dropout=self.dropout,
+										dropout=self.dropout[layer],
 										seed=self.seed,
 										batch_size=self.batch_size,
 										learning_rate=self.learning_rate
@@ -39,7 +42,7 @@ class Model:
 										out_size=self.num_classes,
 										activation_func=self.objective_function,
 										initialization=self.initialization,
-										dropout=self.dropout,
+										dropout=self.dropout[layer],
 										seed=self.seed,
 										batch_size=self.batch_size,
 										learning_rate=self.learning_rate

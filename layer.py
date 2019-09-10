@@ -5,7 +5,7 @@ class Layer():
 
 	def __init__(self, in_size, out_size, activation_func, initialization, learning_rate, dropout=0, seed=-1, batch_size=1):
 		if seed != -1:
-			np.random.seed(seed)
+			np.random.seed(seed=seed)
 
 		if str.lower(initialization) == "normal":
 			self.weights = np.random.normal(0, 1, size=(in_size, out_size))
@@ -37,7 +37,7 @@ class Layer():
 		else:
 			assert("Invalid activation function is passed. Valid functions: relu, sigmoid, tanh")
 
-		self.dropout = dropout
+		self.dropout_prob = dropout
 		self.batch_size = batch_size
 		self.in_size = in_size
 		self.out_size = out_size
@@ -68,41 +68,38 @@ class Layer():
 
 		return data
 
+	def dropout(self, drop_prob, data):
+		if drop_prob != 0:
+			if self.batch_size != 1:
+				pass
+
+			else:
+				probs = np.random.rand(len(data))
+				probs[probs <= drop_prob] = 0
+				probs[probs > drop_prob] = 1
+				data = data * probs
+
+		return data
+
 
 	####################################################################################
 	#                                 FORWARD FUNCTIONS                                #
 	####################################################################################
 	def relu_forward(self, X):
 
-		if self.batch_size != 1:
-			for batch in range(len(X)):
-				for neuron in range(len(X[batch])):
-					X[batch][neuron] = np.maximum(0, X[batch][neuron])
-
-		else:
-			for neuron in range(len(X)):
-				X[neuron] = np.maximum(0, X[neuron])
-
-		self.activated_output = X
-
-		return X
+		self.activated_output = np.maximum(0, X)
+		return self.activated_output
 
 
 	def sigmoid_forward(self, X):
-		activate = lambda z: 1/(1+np.exp(-z))
-
 		if self.batch_size != 1:
-			for batch in range(len(X)):
-				X[batch] = list(map(activate, X[batch]))
-
-			self.activated_output = np.asarray(X)
-			return np.asarray(X)
+			self.activated_output = 1 / (1 + np.exp(np.dot(X, -1)))
+			return self.activated_output
 
 		else:
 			X = np.squeeze(X)
-			X = self.activation_clip(X, 700) #gradient clipping for inf or 0 values, range:[-700, 700]
 
-			self.activated_output = np.asarray(list(map(activate, X)))
+			self.activated_output = 1 / (1 + np.exp(np.dot(X, -1)))
 			return self.activated_output
 
 
@@ -115,11 +112,11 @@ class Layer():
 				X[batch] = list(map(activate, X[batch]))
 
 			self.activated_output = np.asarray(X)
-			return np.asarray(X)
+			return self.activated_output
 
 		else:
 			self.activated_output = np.asarray(list(map(activate, X)))
-			return np.asarray(list(map(activate, X)))
+			return self.activated_output
 
 
 
@@ -127,68 +124,41 @@ class Layer():
 		probs = []
 
 		if self.batch_size != 1:
-			denominators = []
-
-			# first, determine denominators to not calculate it for every neuron
-			for batch in range(len(X)):
-				sum = 0
-				X[batch] = self.normalize(X[batch], range_max=200, range_min=-200) #activation normalization
-				for neuron in X[batch]:
-					sum += np.power(np.e, neuron)
-
-				if sum == 0:
-					denominators.append(0.000001) #0 division prevention, never happens but it's better to be protective
-				else:
-					denominators.append(sum)
-
-			# apply softmax to each neuron
-			for batch in range(len(X)):
-				prob = []
-				for neuron in X[batch]:
-					prob.append((np.power(np.e, neuron)/denominators[batch]))
-
-				probs.append(prob)
+			for batch in X:
+				exps = np.exp(batch - np.max(batch))  # stable softmax
+				probs.append(exps / np.sum(exps))
 
 			self.activated_output = np.asarray(probs)
 			return np.asarray(probs)
 
 		else:
-			denominator = 0
+			exps = np.exp(X - np.max(X))  # stable softmax
+			probs = exps / np.sum(exps)
 
-			# first, determine denominator to not calculate it for every neuron
-			for neuron in X:
-				denominator += np.power(np.e, neuron)
-
-			# apply softmax to each neuron
-			for neuron in X:
-				probs.append((np.power(np.e, neuron) / denominator))
-
-
-			self.activated_output = np.squeeze(np.asarray(probs))
+			self.activated_output = np.asarray(probs)
 			return self.activated_output
 
 
 	####################################################################################
 	#                                 BACKWARD FUNCTIONS                               #
 	####################################################################################
+
 	def relu_backward(self, X):
-		back = np.zeros(np.shape(X))
 
 		if self.batch_size != 1:
-			for batch in range(len(X)):
-				for neuron in range(len(X[batch])):
-					if X[batch][neuron] > 0:
-						back[batch][neuron] = 1
+			i = 0
+
+			for batch in X:
+				batch[batch > 0] = 1
+				batch[batch <= 0] = 0
+				X[i] = batch
+				i += 1
 
 		else:
+			X[X > 0] = 1
+			X[X <= 0] = 0
 
-			X = X[0]
-			back = back[0]
-			for neuron in range(len(X)):
-				if X[neuron] > 0:
-					back[neuron] = 1
-
-		return back.squeeze()
+		return X
 
 
 	def sigmoid_backward(self, X):
@@ -228,6 +198,7 @@ class Layer():
 	####################################################################################
 	#                                ITERATION FUNCTIONS                               #
 	####################################################################################
+
 	def forward(self, X):
 		X = list(X)
 		X = np.squeeze(X)
@@ -235,12 +206,14 @@ class Layer():
 
 		if self.batch_size != 1:
 			Z = np.add(np.asarray(X).dot(self.weights), self.bias)
+
 		else:
 			Z = np.add(np.asarray(X).dot(self.weights), self.bias)
 			Z = np.squeeze(Z)
+			layer_output = self.dropout(self.dropout_prob, self.activation_function(Z))
+			self.activated_output = layer_output
 
-
-		return self.activation_function(Z)
+		return layer_output
 
 
 	def backward(self, error_signal):
@@ -248,9 +221,10 @@ class Layer():
 		if self.batch_size != 1:
 			pass
 		else:
-			# First we get rid of all possible empty dimensions then add only 1. ((1,1,2) may happen istead of (1,2))
+			# First we get rid of all possible empty dimensions then add only 1. ((1,1,2) may happen instead of (1,2))
 			self.activated_output = np.squeeze(self.activated_output)
 			self.activated_output = np.expand_dims(self.activated_output, axis=0)
+
 			# Then add the empty dimension to be able to take dot product
 			error_signal = np.expand_dims(error_signal, axis=0)
 			self.input = np.expand_dims(self.input, axis=0)

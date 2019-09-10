@@ -45,12 +45,12 @@ def data_gen():
 	return train_x, train_y, test_x, test_y
 
 model = Model(activation_func="relu",
-		  initialization="normal",
+		  initialization="xavier",
 		  layer_sizes=[2,5,7,5,2],
 		  num_classes=2,
-		  num_epoch=2,
+		  num_epoch=5,
 		  objective_function="softmax",
-		  dropout=0,
+		  dropout=[0,0.1,0.1,0.1,0],
 		  batch_size=1,
 		  learning_rate=0.01,
 		  print_every=300)
